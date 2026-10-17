@@ -1,0 +1,30 @@
+{
+  "name": "@mall/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc --noEmit",
+    "seed": "tsx src/seed.ts",
+    "test": "tsx --test test/*.test.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
+  },
+  "dependencies": {
+    "express": "^5.0.0",
+    "drizzle-orm": "^0.45.0",
+    "postgres": "^3.4.0",
+    "@electric-sql/pglite": "^0.3.0",
+    "dotenv": "^17.0.0",
+    "zod": "^4.0.0",
+    "helmet": "^8.0.0",
+    "express-rate-limit": "^8.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0",
+    "@types/express": "^5.0.0",
+    "@types/node": "^24.0.0",
+    "drizzle-kit": "^0.31.0"
+  }
+}

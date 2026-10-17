@@ -1,0 +1,10 @@
+FROM node:24-bookworm-slim
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY apps/api/package.json apps/api/package.json
+COPY apps/web/package.json apps/web/package.json
+RUN npm ci --no-audit --no-fund
+COPY apps/api apps/api
+WORKDIR /app/apps/api
+EXPOSE 4000
+CMD ["sh", "-c", "npm run db:migrate && npm run seed && exec npx tsx src/index.ts"]

@@ -1,0 +1,72 @@
+name: Check Oracle Server
+on:
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: oracle-server-check
+  cancel-in-progress: false
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+    steps:
+      - name: Prepare SSH authentication
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSH_PRIVATE_KEY" || { echo 'Please configure SSH_PRIVATE_KEY in repository Secrets.'; exit 1; }
+          test -n "$SSH_KNOWN_HOSTS" || { echo 'Please configure verified SSH_KNOWN_HOSTS in repository Secrets.'; exit 1; }
+          test -n "$SSH_HOST" || { echo 'Please configure SSH_HOST in repository Secrets.'; exit 1; }
+          test -n "$SSH_USER" || { echo 'Please configure SSH_USER in repository Secrets.'; exit 1; }
+          umask 077
+          mkdir -p "$RUNNER_TEMP/mall-ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/mall-ssh/key"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/mall-ssh/known_hosts"
+          ssh-keygen -y -f "$RUNNER_TEMP/mall-ssh/key" > /dev/null
+      - name: Connect and inspect existing services
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -F /dev/null \
+            -i "$RUNNER_TEMP/mall-ssh/key" \
+            -p "$SSH_PORT" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/mall-ssh/known_hosts" \
+            -o ConnectTimeout=15 \
+            "$SSH_USER@$SSH_HOST" 'bash -s' <<'REMOTE'
+          set -eu
+          echo 'SSH connected successfully'
+          uname -sm
+          df -h /
+          free -h
+          for program in docker node npm psql nginx caddy; do
+            if command -v "$program" >/dev/null 2>&1; then
+              echo "Available: $program"
+              case "$program" in
+                docker) docker --version; docker compose version || true ;;
+                node) node --version ;;
+                npm) npm --version ;;
+                psql) psql --version ;;
+              esac
+            fi
+          done
+          echo 'Listening TCP ports:'
+          ss -ltnH | awk '{n=split($4,a,":"); print a[n]}' | sort -nu
+          echo 'Service state:'
+          systemctl is-active docker postgresql nginx caddy || true
+          if command -v docker >/dev/null 2>&1; then
+            docker ps --format '{{.Names}} {{.Image}}' || true
+          fi
+          REMOTE
+      - name: Remove temporary credentials
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/mall-ssh"
